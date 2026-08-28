@@ -339,8 +339,16 @@ public:
 	Plovilo& operator=(const Plovilo& obj) {
 		if (this != &obj)
 		{
-			delete[] _oznaka; delete[] _naziv;
-			_oznaka = nullptr; _naziv = nullptr;
+			delete[] _oznaka;
+			delete[] _naziv;
+
+			for (auto* najam : _najmovi)
+				delete najam;
+
+			_najmovi.clear();
+
+			_oznaka = nullptr;
+			_naziv = nullptr;
 
 			_oznaka = AlocirajTekst(obj.GetOznaka());
 			_naziv = AlocirajTekst(obj.GetNaziv());
@@ -355,8 +363,16 @@ public:
 		return *this;
 	}
 	~Plovilo() {
-		delete[] _oznaka; delete[] _naziv;
-		_oznaka = nullptr; _naziv = nullptr;
+		delete[] _oznaka;
+		delete[] _naziv;
+
+		for (auto* najam : _najmovi)
+			delete najam;
+
+		_najmovi.clear();
+
+		_oznaka = nullptr;
+		_naziv = nullptr;
 	}
 	const char* GetOznaka() const { return _oznaka; }
 	const char* GetNaziv() const { return _naziv; }
