@@ -1,18 +1,16 @@
 #include <iostream>
-#include <vector>
 #include <string>
+#include <vector>
+#include <cstring>
 #include <regex>
 #include <thread>
-#include <chrono>
+#include <functional>
 #include <algorithm>
-#include <ctime>
-#include <fstream>
 #include <iomanip>
+#include <ctime>
 #include <sstream>
+#include <fstream>
 using namespace std;
-
-string crt = "\n---------------------------------------------------------------------------------\n";
-
 char* AlocirajTekst(const char* tekst) {
 	if (tekst == nullptr) return nullptr;
 	size_t velicina = strlen(tekst) + 1;
@@ -20,376 +18,725 @@ char* AlocirajTekst(const char* tekst) {
 	strcpy_s(noviTekst, velicina, tekst);
 	return noviTekst;
 }
-
-enum TipAranzmana { ODMOR, EKSKURZIJA, AVANTURA, POSLOVNO };
-const char* TipAranzmanaOznake[] = { "OD", "EK", "AV", "PO" };
-const char* TipAranzmanaNazivi[] = { "ODMOR", "EKSKURZIJA", "AVANTURA", "POSLOVNO" };
-
-/*
-	Funkcija GenerisiOznaku generise oznaku u formatu: TA-TP-BBBB-IN
-	TA -> fiksna oznaka agencije,
-	TP -> oznaka tipa aranzmana: OD (odmor), EK (ekskurzija), AV (avantura), PO (poslovno),
-	BBBB -> redni broj popunjen nulama na slobodnim mjestima (raspon 1-9999),
-	IN -> inicijali prve i posljednje rijeci imena i prezimena.
-	Za neispravne podatke funkcija vraca "TA-XX-0000-XX".
-	*/
-string GenerisiOznaku(const char* imePrezime, int redniBroj, TipAranzmana tip) {
-	if (redniBroj < 1 || redniBroj > 9999) return "TA-XX-0000-XX";
-	if (imePrezime == nullptr && strlen(imePrezime) < 1) return "TA-XX-0000-XX";
-	if (tip != ODMOR && tip != EKSKURZIJA && tip != AVANTURA && tip != POSLOVNO)  return "TA-XX-0000-XX";
+enum TipPlovila { JEDRILICA, MOTORNI_CAMAC, KATAMARAN, JAHTA };
+const char* TipPlovilaNazivi[] = {
+"JEDRILICA", "MOTORNI CAMAC", "KATAMARAN", "JAHTA" };
+const char* crt = "\n---------------------------------------------------------------------------------\n";
+string GenerisiOznakuPlovila(const char* naziv, int kapacitet, int godinaProizvodnje) {
+	if (kapacitet < 1 || kapacitet > 200) return "MR-000/XX-X";
+	if (naziv == nullptr || strlen(naziv) < 1)  return "MR-000/XX-X";
 
 	string oznaka;
+	oznaka += "MR-";
 
-	oznaka += "TA-";
-	switch (tip)
-	{
-	case ODMOR: oznaka += "OD"; break;
-	case EKSKURZIJA: oznaka += "EK"; break;
-	case AVANTURA: oznaka += "AV";  break;
-	case POSLOVNO: oznaka += "PO"; break;
-	default:  return "TA-XX-0000-XX"; break;
-	}
+	// KKK
+	if (kapacitet < 10) oznaka += "00";
+	else if (kapacitet < 100) oznaka += "0";
+	oznaka += to_string(kapacitet);
+	oznaka += "/";
+
+	// VV
+	oznaka += toupper(naziv[0]);
+	const char* razmak = strchr(naziv, ' ');
+	if (razmak != nullptr && strlen(razmak) > 1) oznaka += toupper(razmak[1]);
+	if (razmak == nullptr)  return "MR-000/XX-X";
 	oznaka += "-";
 
-	if (redniBroj < 10) oznaka += "000";
-	else if (redniBroj < 100) oznaka += "00";
-	else if (redniBroj < 1000) oznaka += "0";
-	oznaka += to_string(redniBroj);
-	oznaka += "-";
-
-	oznaka += toupper(imePrezime[0]);
-	const char* zadnjiRazmak = strrchr(imePrezime, ' ');
-	if (zadnjiRazmak != nullptr && strlen(zadnjiRazmak) > 1) oznaka += toupper(zadnjiRazmak[1]);
-	else return "TA-XX-0000-XX";
+	// G
+	int zadnjaCifraGodineProizvodnje = godinaProizvodnje % 10;
+	oznaka += to_string(zadnjaCifraGodineProizvodnje);
 
 	return oznaka;
-};
-bool ValidirajOznaku(const string& oznaka);
+}
+bool ValidirajOznakuPlovila(const string& oznaka) {
+	return regex_match(oznaka, regex("MR-(?!000)\\d{3}/[A-Z]{2}-\\d"));
+}
+template<class T1, class T2, int max>
+class Kolekcija {
+	T1* _elementi1;
+	T2* _elementi2;
+	int _trenutno;
+public:
+	Kolekcija() : _trenutno(0) {
+		_elementi1 = new T1[max];
+		_elementi2 = new T2[max];
+	}
+	Kolekcija(const Kolekcija& obj) {
+		_trenutno = obj.GetTrenutno();
 
-///*
-//Klasa Kolekcija cuva parove elemenata preko pokazivaca (T1*, T2*) u nizovima
-//fiksne velicine max. Kako klasa upravlja dinamicki alociranim resursima,
-//potrebno je implementirati i konstruktor kopije i operator dodjele (pravilo
-//trojke), tako da kopija i original imaju potpuno nezavisne resurse.
-//*/
-//template<class T1, class T2, int max>
-//class Kolekcija {
-//	T1* _elementi1[max];
-//	T2* _elementi2[max];
-//	int _trenutno;
-//public:
-//	Kolekcija() : _trenutno(0) {
-//		for (int i = 0; i < max; i++) {
-//			_elementi1[i] = nullptr;
-//			_elementi2[i] = nullptr;
-//		}
-//	}
-//	// konstruktor kopije - duboka kopija svih elemenata
-//	
-//	// operator dodjele - duboka kopija, uz oslobadjanje postojecih resursa
-//		return *this;
-//	}
-//	~Kolekcija() {
-//		for (int i = 0; i < _trenutno; i++) {
-//			delete _elementi1[i];
-//			delete _elementi2[i];
-//			_elementi1[i] = nullptr;
-//			_elementi2[i] = nullptr;
-//		}
-//		_trenutno = 0;
-//	}
-//	int GetTrenutno() const { return _trenutno; }
-//	T1& GetElement1(int indeks) { return *_elementi1[indeks]; }
-//	T2& GetElement2(int indeks) { return *_elementi2[indeks]; }
-//	T1& operator[](int indeks) { return *_elementi1[indeks]; }
-//	
-//	// DodajNaPoziciju dodaje novi par na lokaciju/indeks definisanu prvim parametrom,
-//	// pomjera postojece pokazivace udesno i vraca trenutno stanje kolekcije (*this).
-//	// U slucaju popunjene kolekcije ili neispravne lokacije potrebno je baciti izuzetak.
-//	
-//	// UkloniSaPozicije uklanja par sa proslijedjene pozicije/indeksa, preostale elemente
-//	// pomjera ulijevo i vraca uklonjeni par u obliku pair<T1, T2>.
-//	// Za poziciju izvan opsega baca se izuzetak.
-//	
-//	friend ostream& operator<<(ostream& COUT, const Kolekcija& obj) {
-//		for (int i = 0; i < obj._trenutno; i++)
-//			COUT << *obj._elementi1[i] << " " << *obj._elementi2[i] << endl;
-//		return COUT;
-//	}
-//};
-//
-//class DatumVrijeme {
-//	int* _dan, * _mjesec, * _godina, * _sati, * _minute;
-//public:
-//	DatumVrijeme(int dan = 1, int mjesec = 1, int godina = 2000, int sati = 0, int minute = 0) {
-//		_dan = new int(dan);
-//		_mjesec = new int(mjesec);
-//		_godina = new int(godina);
-//		_sati = new int(sati);
-//		_minute = new int(minute);
-//	}
-//	DatumVrijeme(const DatumVrijeme& obj) {
-//		_dan = new int(*obj._dan);
-//		_mjesec = new int(*obj._mjesec);
-//		_godina = new int(*obj._godina);
-//		_sati = new int(*obj._sati);
-//		_minute = new int(*obj._minute);
-//	}
-//	// ToString vraca datum i vrijeme u formatu DD.MM.GGGG HH:MM, ukljucujuci pocetne nule
-//	
-//	// operator> vraca true ako je *this hronoloski nakon obj
-//	
-//	
-//	friend ostream& operator<<(ostream& COUT, const DatumVrijeme& obj) {
-//		COUT << obj.ToString();
-//		return COUT;
-//	}
-//	~DatumVrijeme() {
-//		delete _dan; delete _mjesec; delete _godina; delete _sati; delete _minute;
-//		_dan = _mjesec = _godina = _sati = _minute = nullptr;
-//	}
-//};
-//
-//class Aranzman {
-//	char* _oznaka;
-//	char* _naziv;
-//	TipAranzmana _tip;
-//	DatumVrijeme _pocetak;
-//	int _trajanjeDana;
-//public:
-//	Aranzman(const char* naziv, const char* imePrezimePutnika, int redniBroj,
-//		TipAranzmana tip, DatumVrijeme pocetak, int trajanjeDana)
-//		: _tip(tip), _pocetak(pocetak), _trajanjeDana(trajanjeDana) {
-//		_naziv = AlocirajTekst(naziv);
-//		_oznaka = AlocirajTekst(GenerisiOznaku(imePrezimePutnika, redniBroj, tip).c_str());
-//	}
-//	~Aranzman() {
-//		delete[] _oznaka; _oznaka = nullptr;
-//		delete[] _naziv; _naziv = nullptr;
-//	}
-//	const char* GetOznaka() const { return _oznaka; }
-//	const char* GetNaziv() const { return _naziv; }
-//	TipAranzmana GetTip() const { return _tip; }
-//	DatumVrijeme& GetPocetak() { return _pocetak; }
-//	int GetTrajanjeDana() const { return _trajanjeDana; }
-//	// ToString vraca podatke u formatu:
-//	// oznaka | naziv | tip | pocetak | broj dana
-//	// TA-EK-0042-AB | Obilazak Toskane | EKSKURZIJA | 15.07.2026 08:00 | 5
-//	
-//	// ImaPreklapanjeSa vraca true ako se termini (od pocetka do pocetak+trajanjeDana)
-//	// dva aranzmana preklapaju. aranzman koji pocinje onog dana kada se prethodni
-//	// zavrsava nije preklapajuci.
-//	
-//};
-//
-//class Putnik {
-//	static int _id;
-//	char* _sifra;
-//	char* _imePrezime;
-//	vector<Aranzman> _aranzmani;
-//public:
-//	Putnik(const char* imePrezime = "") {
-//		_imePrezime = AlocirajTekst(imePrezime);
-//		_sifra = AlocirajTekst(GenerisiOznaku(imePrezime, _id, ODMOR).c_str());
-//		_id++;
-//	}
-//	~Putnik() {
-//		delete[] _sifra; _sifra = nullptr;
-//		delete[] _imePrezime; _imePrezime = nullptr;
-//	}
-//	const char* GetSifra() const { return _sifra; }
-//	const char* GetImePrezime() const { return _imePrezime; }
-//	vector<Aranzman>& GetAranzmani() { return _aranzmani; }
-//	// PrijaviAranzman dodaje aranzman putniku ako se ne preklapa ni sa jednim vec
-//	// prijavljenim aranzmanom, i ako ukupan broj dana putovanja u kalendarskoj godini
-//	// (zbirno sa novim aranzmanom) ne prelazi 30 dana. metoda vraca true/false.
-//	
-//	friend ostream& operator<<(ostream& COUT, Putnik& obj) {
-//		COUT << obj._imePrezime << " [" << obj._sifra << "]" << endl;
-//		for (auto& aranzman : obj._aranzmani)
-//			COUT << " - " << aranzman.ToString() << endl;
-//		return COUT;
-//	}
-//};
-//int Putnik::_id = 0;
-//
-//class Agencija {
-//	char* _naziv;
-//	vector<Putnik> _putnici;
-//public:
-//	Agencija(const char* naziv = "") { _naziv = AlocirajTekst(naziv); }
-//	Agencija(const Agencija& obj) {
-//		_naziv = AlocirajTekst(obj._naziv);
-//		_putnici = obj._putnici;
-//	}
-//	~Agencija() { delete[] _naziv; _naziv = nullptr; }
-//	const char* GetNaziv() const { return _naziv; }
-//	vector<Putnik>& GetPutnici() { return _putnici; }
-//	// DodajPutnika onemogucava dodavanje putnika sa istom sifrom i baca izuzetak
-//	
-//	// PronadjiPutnika vraca pokazivac na putnika sa proslijedjenom sifrom.
-//	// Ako putnik nije pronadjen, metoda vraca nullptr.
-//	
-//	// PrijaviAranzmanZaPutnika pronalazi putnika po sifri i pokusava mu prijaviti
-//	// aranzman koristeci pravila metode PrijaviAranzman. Nakon uspjesne prijave,
-//	// u zasebnom thread-u, treba poslati obavijest putniku sa razmakom od 2 sekunde,
-//	// sadrzaja:
-//	//
-//	// To: <sifra putnika>@agencija.ba
-//	// From: info@agencija.ba
-//	// Subject: Potvrda rezervacije
-//	// Postovani <ime i prezime>,
-//	// Vasa rezervacija za aranzman <naziv aranzmana> (<tip>) je potvrdjena.
-//	// Polazak: <datum i vrijeme pocetka>
-//	// Prijatno putovanje!
-//	//
-//	// Ako putnik ne postoji ili prijava nije uspjela, obavijest se ne salje i
-//	// metoda vraca false.
-//	
-//	// AktivniPutnici vraca pokazivace na putnike koji imaju najmanje onoliko
-//	// prijavljenih aranzmana koliko je definisano vrijednoscu parametra.
-//	
-//	// StatistikaPoTipu vraca kolekciju koja za svaki tip aranzmana, redoslijedom
-//	// definisanim enumom TipAranzmana, sadrzi tip i ukupan broj prijavljenih
-//	// aranzmana tog tipa u agenciji (ukljucujuci tipove sa nula prijava).
-//	
-//	// operator() vraca sve putnike u agenciji koji imaju broj prijavljenih aranzmana
-//	// >= proslijedjenoj vrijednosti, sortirane opadajuce po broju aranzmana
-//	// (iskoristiti lambda izraz za sortiranje).
-//	
-//};
+		_elementi1 = new T1[_trenutno];
+		_elementi2 = new T2[_trenutno];
+
+		for (size_t i = 0; i < _trenutno; i++)
+		{
+			_elementi1[i] = obj.GetElement1(i);
+			_elementi2[i] = obj.GetElement2(i);
+		}
+	}
+	Kolekcija& operator=(const Kolekcija& obj) {
+		if (this != &obj)
+		{
+			delete[] _elementi1; delete[] _elementi2;
+			_elementi1 = nullptr; _elementi2 = nullptr;
+
+			_trenutno = obj.GetTrenutno();
+
+			_elementi1 = new T1[_trenutno];
+			_elementi2 = new T2[_trenutno];
+
+			for (size_t i = 0; i < _trenutno; i++)
+			{
+				_elementi1[i] = obj.GetElement1(i);
+				_elementi2[i] = obj.GetElement2(i);
+			}
+		}
+		return *this;
+	}
+	~Kolekcija() {
+		delete[] _elementi1; delete[] _elementi2;
+		_elementi1 = nullptr; _elementi2 = nullptr;
+	}
+	int GetTrenutno() const { return _trenutno; }
+	T1& GetElement1(int i) { return _elementi1[i]; }
+	T2& GetElement2(int i) { return _elementi2[i]; }
+	const T1& GetElement1(int i) const { return _elementi1[i]; }
+	const T2& GetElement2(int i) const { return _elementi2[i]; }
+	friend ostream& operator<<(ostream& COUT, Kolekcija& obj) {
+		for (int i = 0; i < obj.GetTrenutno(); i++)
+			COUT << obj.GetElement1(i) << " " << obj.GetElement2(i) << endl;
+		return COUT;
+	}
+	void Dodaj(const T1& el1, const T2& el2) {
+		if (_trenutno >= max) throw exception("Kolekcija je puna");
+
+		_elementi1[_trenutno] = el1;
+		_elementi2[_trenutno] = el2;
+
+		_trenutno++;
+	}
+	Kolekcija IzdvojiUOpsegu(const T2& donjaGranica, const T2& gornjaGranica) {
+		Kolekcija temp;
+		for (size_t i = 0; i < _trenutno; i++)
+		{
+			if (_elementi2[i] >= donjaGranica && _elementi2[i] <= gornjaGranica) temp.Dodaj(GetElement1(i), GetElement2(i));
+		}
+		return temp;
+	}
+};
+class DatumVrijeme {
+	int* _dan, * _mjesec, * _godina, * _sati, * _minute;
+public:
+	DatumVrijeme(int dan = 1, int mjesec = 1, int godina = 2000, int sati = 0, int minute = 0) {
+		_dan = new int(dan); _mjesec = new int(mjesec); _godina = new int(godina);
+		_sati = new int(sati); _minute = new int(minute);
+	}
+	DatumVrijeme(const DatumVrijeme& obj) {
+		_dan = new int(*obj._dan); _mjesec = new int(*obj._mjesec); _godina = new int(*obj._godina);
+		_sati = new int(*obj._sati); _minute = new int(*obj._minute);
+	}
+	DatumVrijeme& operator=(const DatumVrijeme& obj) {
+		if (this != &obj)
+		{
+			delete _dan; delete _mjesec; delete _godina; delete _sati; delete _minute;
+			_dan = _mjesec = _godina = _sati = _minute = nullptr;
+
+			_dan = new int(*obj._dan); _mjesec = new int(*obj._mjesec); _godina = new int(*obj._godina);
+			_sati = new int(*obj._sati); _minute = new int(*obj._minute);
+		}
+		return *this;
+	}
+	~DatumVrijeme() {
+		delete _dan; delete _mjesec; delete _godina; delete _sati; delete _minute;
+		_dan = _mjesec = _godina = _sati = _minute = nullptr;
+	}
+	int GetGodina() const { return *_godina; }
+	int GetMjesec() const { return *_mjesec; }
+	int GetDan() const { return *_dan; }
+	int GetSati() const { return *_sati; }
+	int GetMinute() const { return *_minute; }
+	friend ostream& operator<<(ostream& COUT, const DatumVrijeme& obj) {
+		COUT << obj.ToString();
+		return COUT;
+	}
+	string ToString() const {
+		stringstream ss;
+
+		ss << setw(2) << setfill('0') << *_dan << "."
+			<< setw(2) << setfill('0') << *_mjesec << "."
+			<< setw(2) << setfill('0') << *_godina << " "
+			<< setw(2) << setfill('0') << *_sati << ":"
+			<< setw(2) << setfill('0') << *_minute;
+
+		return ss.str();
+	};
+	bool poklapaLiSeDatum(const DatumVrijeme& obj) const {
+		return *_dan == obj.GetDan() &&
+			*_mjesec == obj.GetMjesec() &&
+			*_godina == obj.GetGodina();
+	}
+};
+class Najam {
+protected:
+	DatumVrijeme _pocetak;
+	int _trajanjeSati;
+public:
+	Najam(const DatumVrijeme& pocetak, int trajanjeSati)
+		: _pocetak(pocetak), _trajanjeSati(trajanjeSati) {
+	}
+	Najam(const Najam& obj) {
+		_pocetak = obj.GetPocetak();
+		_trajanjeSati = obj.GetTrajanjeSati();
+	}
+	Najam& operator=(const Najam& obj) {
+		if (this != &obj)
+		{
+			_pocetak = obj.GetPocetak();
+			_trajanjeSati = obj.GetTrajanjeSati();
+		}
+		return *this;
+	}
+	virtual ~Najam() {}
+	virtual string Info() const = 0;
+	virtual Najam* GetClone() const = 0;
+	const DatumVrijeme& GetPocetak() const { return _pocetak; }
+	int GetTrajanjeSati() const { return _trajanjeSati; }
+	bool daLiSeTerminiPoklapaju(const Najam& najam) {
+		int pocetakPrvog = _pocetak.GetMinute() + _pocetak.GetSati() * 60;
+		int krajPrvog = pocetakPrvog + _trajanjeSati * 60;
+
+		int pocetakDrugog = najam.GetPocetak().GetMinute() + najam.GetPocetak().GetSati() * 60;
+		int krajDrugog = pocetakDrugog + najam.GetTrajanjeSati() * 60;
+
+		if (pocetakDrugog >= krajPrvog || pocetakPrvog >= krajDrugog) return false;
+		return true;
+	}
+};
+class IndividualniNajam : public Najam {
+public:
+	IndividualniNajam(const DatumVrijeme& pocetak, int trajanjeSati)
+		: Najam(pocetak, trajanjeSati) {
+	}
+	// Info() nije preklopljena - dodati override koji vraca npr:
+	// "03.05.2026 09:00 INDIVIDUALNI NAJAM (3h)"
+	~IndividualniNajam() {};
+	string Info() const {
+		stringstream ss;
+
+		ss << setw(2) << setfill('0') << _pocetak.GetDan() << "."
+			<< setw(2) << setfill('0') << _pocetak.GetMjesec() << "."
+			<< setw(2) << setfill('0') << _pocetak.GetGodina() << " "
+			<< setw(2) << setfill('0') << _pocetak.GetSati() << ":"
+			<< setw(2) << setfill('0') << _pocetak.GetMinute();
+
+		ss << "INDIVIDUALNI NAJAM (" << GetTrajanjeSati() << "h)";
+		return ss.str();
+	}
+	Najam* GetClone() const { return new IndividualniNajam(*this); };
+};
+class GrupniNajam : public Najam {
+	int _brojPutnika;
+public:
+	GrupniNajam(const DatumVrijeme& pocetak, int trajanjeSati, int brojPutnika)
+		: Najam(pocetak, trajanjeSati), _brojPutnika(brojPutnika) {
+	}
+	~GrupniNajam() {};
+	string Info() const {
+		stringstream ss;
+
+		ss << setw(2) << setfill('0') << _pocetak.GetDan() << "."
+			<< setw(2) << setfill('0') << _pocetak.GetMjesec() << "."
+			<< setw(2) << setfill('0') << _pocetak.GetGodina() << " "
+			<< setw(2) << setfill('0') << _pocetak.GetSati() << ":"
+			<< setw(2) << setfill('0') << _pocetak.GetMinute();
+
+		ss << "GRUPNI NAJAM ZA " << GetBrojPutnika() << " OSOBA (" << GetTrajanjeSati() << "h)";
+		return ss.str();
+	}
+	int GetBrojPutnika()const { return _brojPutnika; };
+	Najam* GetClone() const { return new GrupniNajam(*this); };
+};
+class Klijent {
+	static int _id;
+	char* _sifra;
+	char* _imePrezime;
+	char* _brojTelefona;
+	vector<Najam*> _najmovi;
+public:
+	Klijent(string imePrezime, string brojTelefona) {
+		_imePrezime = AlocirajTekst(imePrezime.c_str());
+		_brojTelefona = AlocirajTekst(brojTelefona.c_str());
+		_sifra = AlocirajTekst(GenerisiSifruKlijenta().c_str());
+	}
+	Klijent(const Klijent& obj) {
+		_sifra = AlocirajTekst(obj.GetSifra());
+		_imePrezime = AlocirajTekst(obj.GetImePrezime());
+		_brojTelefona = AlocirajTekst(obj.GetBrojTelefona());
+		for (size_t i = 0; i < obj._najmovi.size(); i++)
+		{
+			_najmovi.push_back(obj._najmovi[i]->GetClone());
+		}
+	}
+	Klijent& operator=(const Klijent& obj) {
+		if (this != &obj)
+		{
+			delete[] _imePrezime; delete[] _brojTelefona; delete[] _sifra;
+			for (auto* n : _najmovi) delete n;
+			_najmovi.clear();
+
+			_sifra = AlocirajTekst(obj.GetSifra());
+			_imePrezime = AlocirajTekst(obj.GetImePrezime());
+			_brojTelefona = AlocirajTekst(obj.GetBrojTelefona());
+			for (size_t i = 0; i < obj._najmovi.size(); i++)
+			{
+				_najmovi.push_back(obj._najmovi[i]->GetClone());
+			}
+		}
+		return *this;
+	}
+	~Klijent() {
+		delete[] _imePrezime; delete[] _brojTelefona; delete[] _sifra;
+		for (auto* n : _najmovi) delete n;
+		_najmovi.clear();
+	}
+	const char* GetImePrezime() const { return _imePrezime; }
+	const char* GetBrojTelefona() const { return _brojTelefona; }
+	const char* GetSifra() const { return _sifra; }
+	// operator<< nije dat - format prikaza (klijent + njegovi najmovi preko Info())
+	// osmisliti samostalno.
+	static string GenerisiSifruKlijenta();
+	bool operator==(const Klijent& obj) const {
+		return strcmp(_sifra, obj.GetSifra()) == 0;
+	}
+	vector<Najam*>& GetNajmovi() { return _najmovi; };
+};
+int Klijent::_id = 1;
+class Plovilo {
+	char* _oznaka;
+	char* _naziv;
+	TipPlovila _tip;
+	int _kapacitet;
+	double _cijenaPoSatu;
+	vector<Najam*> _najmovi;
+public:
+	Plovilo(const char* naziv, TipPlovila tip, int kapacitet, double cijenaPoSatu, int godinaProizvodnje) {
+		_naziv = AlocirajTekst(naziv);
+		_tip = tip;
+		_kapacitet = kapacitet;
+		_cijenaPoSatu = cijenaPoSatu;
+		_oznaka = AlocirajTekst(GenerisiOznakuPlovila(naziv, kapacitet, godinaProizvodnje).c_str());
+	}
+	Plovilo(const Plovilo& obj) {
+		_oznaka = AlocirajTekst(obj.GetOznaka());
+		_naziv = AlocirajTekst(obj.GetNaziv());
+		_tip = obj.GetTip();
+		_kapacitet = obj.GetKapacitet();
+		_cijenaPoSatu = obj.GetCijenaPoSatu();
+		for (size_t i = 0; i < obj._najmovi.size(); i++)
+		{
+			_najmovi.push_back(obj._najmovi[i]->GetClone());
+		}
+	}
+	Plovilo& operator=(const Plovilo& obj) {
+		if (this != &obj)
+		{
+			delete[] _oznaka;
+			delete[] _naziv;
+
+			for (auto* najam : _najmovi)
+				delete najam;
+
+			_najmovi.clear();
+
+			_oznaka = nullptr;
+			_naziv = nullptr;
+
+			_oznaka = AlocirajTekst(obj.GetOznaka());
+			_naziv = AlocirajTekst(obj.GetNaziv());
+			_tip = obj.GetTip();
+			_kapacitet = obj.GetKapacitet();
+			_cijenaPoSatu = obj.GetCijenaPoSatu();
+			for (size_t i = 0; i < obj._najmovi.size(); i++)
+			{
+				_najmovi.push_back(obj._najmovi[i]->GetClone());
+			}
+		}
+		return *this;
+	}
+	~Plovilo() {
+		delete[] _oznaka;
+		delete[] _naziv;
+
+		for (auto* najam : _najmovi)
+			delete najam;
+
+		_najmovi.clear();
+
+		_oznaka = nullptr;
+		_naziv = nullptr;
+	}
+	const char* GetOznaka() const { return _oznaka; }
+	const char* GetNaziv() const { return _naziv; }
+	TipPlovila GetTip() const { return _tip; }
+	int GetKapacitet() const { return _kapacitet; }
+	double GetCijenaPoSatu() const { return _cijenaPoSatu; }
+	friend ostream& operator<<(ostream& COUT, const Plovilo& obj) {
+		COUT << "Oznaka: " << obj.GetOznaka() << " :: " << endl;
+		COUT << "Naziv: " << obj.GetNaziv() << " :: " << endl;
+		COUT << "Tip: " << TipPlovilaNazivi[obj.GetTip()] << " :: " << endl;
+		COUT << "Kapacitet: " << obj.GetKapacitet() << " :: " << endl;
+		COUT << "Cijena po satu: " << obj.GetKapacitet() << "KM";
+		return COUT;
+	}
+	bool operator==(const Plovilo& obj) const {
+		return strcmp(_oznaka, obj.GetOznaka()) == 0;
+	}
+	vector<Najam*>& GetNajmovi() { return _najmovi; };
+	double UkupanPrihod() {
+		double ukupanPrihod = 0.00;
+		for (size_t i = 0; i < _najmovi.size(); i++)
+		{
+			ukupanPrihod += _cijenaPoSatu * _najmovi[i]->GetTrajanjeSati();
+		}
+		return ukupanPrihod;
+	}
+	double UkupnoZauzetihSati() {
+		double zauzetost = 0.00;
+		for (size_t i = 0; i < _najmovi.size(); i++)
+		{
+			zauzetost += _najmovi[i]->GetTrajanjeSati();
+		}
+		return zauzetost;
+	}
+};
+int getTrenutnuGodinuIzSistema() {
+	time_t trenutnoVrijeme = time(nullptr);
+	tm timeInfo{};
+	localtime_s(&timeInfo, &trenutnoVrijeme);
+	int godina = (timeInfo.tm_year + 1900) % 100;
+	return godina;
+}
+string Klijent::GenerisiSifruKlijenta() {
+	stringstream ss;
+
+	ss << "KL-" << setw(2) << setfill('0') << getTrenutnuGodinuIzSistema() << "-" << setw(3) << setfill('0') << _id++;
+	return ss.str();
+}
+class Marina {
+	char* _naziv;
+	vector<Klijent> _klijenti;
+	vector<Plovilo> _plovila;
+public:
+	Marina(const char* naziv) { _naziv = AlocirajTekst(naziv); }
+	Marina(const Marina& obj) {
+		_naziv = AlocirajTekst(obj.GetNaziv());
+		_klijenti = obj._klijenti;
+		_plovila = obj._plovila;
+	}
+	Marina& operator=(const Marina& obj) {
+		if (this != &obj)
+		{
+			delete[] _naziv; _naziv = nullptr;
+
+			_naziv = AlocirajTekst(obj.GetNaziv());
+			_klijenti = obj._klijenti;
+			_plovila = obj._plovila;
+		}
+		return *this;
+	}
+	~Marina() { delete[] _naziv; _naziv = nullptr; }
+	const char* GetNaziv() const { return _naziv; }
+	vector<Klijent>& GetKlijenti() { return _klijenti; }
+	vector<Plovilo>& GetPlovila() { return _plovila; }
+	void DodajPlovilo(const Plovilo& plovilo) {
+		for (auto& p : _plovila) {
+			if (p == plovilo) throw exception("Plovilo sa datom oznakom vec postoji");
+		}
+		_plovila.push_back(plovilo);
+	}
+	void DodajKlijenta(const Klijent& klijent) {
+		for (auto& k : _klijenti) {
+			if (k == klijent) throw exception("Klijent sa datom sifrom vec postoji");
+		}
+		_klijenti.push_back(klijent);
+	}
+	bool NajmiPlovilo(const char* sifra, string oznaka, Najam* najam) {
+		Klijent* klijent = nullptr;
+		for (auto& k : _klijenti) {
+			if (strcmp(k.GetSifra(), sifra) == 0) {
+				klijent = &k;
+				break;
+			}
+		}
+
+		Plovilo* plovilo = nullptr;
+		for (auto& p : _plovila) {
+			if (strcmp(p.GetOznaka(), oznaka.c_str()) == 0) {
+				plovilo = &p;
+				break;
+			}
+		}
+
+		if (klijent == nullptr || plovilo == nullptr) return false;
+
+		for (size_t i = 0; i < plovilo->GetNajmovi().size(); i++)
+		{
+			if (!plovilo->GetNajmovi()[i]->GetPocetak().poklapaLiSeDatum(najam->GetPocetak())) continue;
+			if (plovilo->GetNajmovi()[i]->GetPocetak().poklapaLiSeDatum(najam->GetPocetak())) {
+				if (plovilo->GetNajmovi()[i]->daLiSeTerminiPoklapaju(*najam)) return false;
+			}
+		}
+
+		GrupniNajam* grupniNajam = dynamic_cast<GrupniNajam*>(najam);
+		if (grupniNajam != nullptr)
+		{
+			if (grupniNajam->GetBrojPutnika() > plovilo->GetKapacitet()) return false;
+		}
+
+		plovilo->GetNajmovi().push_back(najam->GetClone());
+		klijent->GetNajmovi().push_back(najam->GetClone());
+
+		if (grupniNajam != nullptr && grupniNajam->GetBrojPutnika() >= 5) {
+			thread t([&]() {
+				cout << "---------------------------------------------------------------------------" << endl;
+				cout << "Broj: " << klijent->GetBrojTelefona() << endl;
+				cout << "Od: " << _naziv << endl;
+				cout << "Poruka: Postovani " << klijent->GetImePrezime() << ", Vasa grupna voznja za " << grupniNajam->GetBrojPutnika() << " osoba na plovilu\n";
+				cout << plovilo->GetOznaka() << " je potvrdjena. Hvala na povjerenju." << endl;
+				cout << "---------------------------------------------------------------------------" << endl;
+				});
+			t.join();
+		}
+		return true;
+	}
+	double UkupanPrihodMarine() {			
+		double ukupanPrihod = 0.00;
+		for (size_t i = 0; i < _plovila.size(); i++)
+		{
+			ukupanPrihod += _plovila[i].UkupanPrihod();
+		}
+		return ukupanPrihod;
+	}
+	vector<Plovilo*> IzdvojiPreopterecena(int minSati) {
+		vector<Plovilo*> temp;
+		for (size_t i = 0; i < _plovila.size(); i++)
+		{
+			if (_plovila[i].UkupnoZauzetihSati() >= minSati) temp.push_back(&_plovila[i]);
+		}
+		return temp;
+	}
+	vector<Plovilo*> IzdvojiPoUslovu(function<bool(const Plovilo&)> uslov) {
+		vector<Plovilo*> temp;
+		for (size_t i = 0; i < _plovila.size(); i++)
+		{
+			if (uslov(_plovila[i]) == true) temp.push_back(&_plovila[i]);
+		}
+		return temp;
+	}
+};
+
+bool UcitajKlijente(const string& putanja, vector<Klijent>& klijenti) {
+	fstream fajl{ putanja };
+
+	if (!fajl.is_open()) return false;
+
+	string imeKlijenta, brojTelefona;
+
+	bool ucitan = false;
+
+	while (getline(fajl, imeKlijenta, '|') && getline(fajl, brojTelefona))
+	{
+		bool pronadjen = false;
+
+		Klijent* trenutniKlijent = nullptr;
+		for (auto& k : klijenti) {
+			if (k.GetImePrezime() == imeKlijenta) {
+				trenutniKlijent = &k;
+				pronadjen = true;
+				break;
+			}
+		}
+		if (!pronadjen)
+		{
+			klijenti.push_back(Klijent(imeKlijenta, brojTelefona));
+			trenutniKlijent = &klijenti.back();
+			ucitan = true;
+		}
+	}
+	return ucitan;
+}
 
 int main() {
+
 	/*
-	Funkcija GenerisiOznaku generise oznaku u formatu: TA-TP-BBBB-IN
-	TA -> fiksna oznaka agencije,
-	TP -> oznaka tipa aranzmana: OD (odmor), EK (ekskurzija), AV (avantura), PO (poslovno),
-	BBBB -> redni broj popunjen nulama na slobodnim mjestima (raspon 1-9999),
-	IN -> inicijali prve i posljednje rijeci imena i prezimena.
-	Za neispravne podatke funkcija vraca "TA-XX-0000-XX".
+	Funkcija GenerisiOznakuPlovila generise oznaku plovila u formatu:
+	MR-KKK/VV-G
+	MR -> fiksni prefiks,
+	KKK -> kapacitet popunjen nulama na slobodnim mjestima (1-200),
+	VV -> inicijali naziva plovila (naziv se sastoji od dvije rijeci, npr. "Jedrilica Vjetar"),
+	G -> posljednja cifra godine proizvodnje.
+	Potpis funkcije treba biti:
+	string GenerisiOznakuPlovila(const char* naziv, int kapacitet, int godinaProizvodnje)
+	Za neispravne podatke funkcija vraca "MR-000/XX-X". Iskoristiti je za inicijalizaciju
+	atributa _oznaka u konstruktoru klase Plovilo.
 	*/
-	if (GenerisiOznaku("Amina Buric", 42, EKSKURZIJA) == "TA-EK-0042-AB")
+	if (GenerisiOznakuPlovila("Jedrilica Vjetar", 8, 2023) == "MR-008/JV-3")
 		cout << "Oznaka OK" << crt;
-	if (GenerisiOznaku("Goran Skondric", 7, ODMOR) == "TA-OD-0007-GS")
+	if (GenerisiOznakuPlovila("Katamaran Plava", 25, 2019) == "MR-025/KP-9")
 		cout << "Oznaka OK" << crt;
-	if (GenerisiOznaku("Ana Marija Kovac", 156, AVANTURA) == "TA-AV-0156-AK")
-		cout << "Oznaka OK" << crt;
-	if (GenerisiOznaku("Amina", 42, EKSKURZIJA) == "TA-XX-0000-XX" &&
-		GenerisiOznaku("Amina Buric", 0, EKSKURZIJA) == "TA-XX-0000-XX" &&
-		GenerisiOznaku("Amina Buric", 10000, EKSKURZIJA) == "TA-XX-0000-XX")
+	if (GenerisiOznakuPlovila("Plovilo", 20, 2020) == "MR-000/XX-X" &&
+		GenerisiOznakuPlovila("Jedrilica Vjetar", 0, 2020) == "MR-000/XX-X" &&
+		GenerisiOznakuPlovila("Jedrilica Vjetar", 8, 2020) != "MR-000/XX-X")
 		cout << "Neispravni podaci za oznaku OK" << crt;
 
-	//// koristeci regex, funkcija ValidirajOznaku provjerava da li je oznaka
-	//// zapisana u prethodno definisanom formatu.
-	//if (ValidirajOznaku("TA-EK-0042-AB"))
-	//	cout << "OZNAKA VALIDNA" << crt;
-	//if (!ValidirajOznaku("TA-XX-0042-AB") && !ValidirajOznaku("TA-EK-042-AB") &&
-	//	!ValidirajOznaku("TA-EK-0042-Ab") && !ValidirajOznaku("TA-EK-0000-AB"))
-	//	cout << "OZNAKA NIJE VALIDNA" << crt;
+	/*
+	Koristeci regex, funkcija ValidirajOznakuPlovila provjerava prethodno
+	definisani format. Kapacitet ne moze biti 000, inicijali moraju biti
+	velika slova, cifra godine jedna znamenka.
+	Potpis funkcije treba biti:
+	bool ValidirajOznakuPlovila(const string& oznaka)
+	*/
+	if (ValidirajOznakuPlovila("MR-008/JV-3"))
+		cout << "OZNAKA VALIDNA" << crt;
+	if (!ValidirajOznakuPlovila("MR-000/JV-3") &&
+		!ValidirajOznakuPlovila("MR-08/JV-3") &&
+		!ValidirajOznakuPlovila("MR-008/jv-3"))
+		cout << "OZNAKA NIJE VALIDNA" << crt;
 
-	//Kolekcija<int, string, 5> brojevi;
-	//brojevi.Dodaj(10, "Deset");
-	//brojevi.Dodaj(20, "Dvadeset");
-	//brojevi.Dodaj(30, "Trideset");
-	//cout << brojevi << crt;
+	Kolekcija<string, double, 6> cjenovnik;
+	cjenovnik.Dodaj("Jedrilica", 12.0);
+	cjenovnik.Dodaj("Motorni camac", 18.0);
+	cjenovnik.Dodaj("Katamaran", 30.0);
+	cjenovnik.Dodaj("Jahta", 45.0);
+	cout << cjenovnik << crt;
 
-	//Kolekcija<int, string, 5> prosireniBrojevi = brojevi.DodajNaPoziciju(1, 15, "Petnaest");
-	//cout << prosireniBrojevi << crt;
+	/*
+	IzdvojiUOpsegu treba vratiti novu kolekciju koja sadrzi samo one parove
+	kod kojih je drugi element (cijena po satu) veci ili jednak donjoj
+	granici i manji ili jednak gornjoj granici. Originalna kolekcija ostaje
+	nepromijenjena.
+	*/
+	Kolekcija<string, double, 6> srednjaKlasa = cjenovnik.IzdvojiUOpsegu(15.0, 35.0);
+	cout << "Cijena izmedju 15 i 35 KM/h:" << crt << srednjaKlasa;
 
-	//pair<int, string> uklonjeni = prosireniBrojevi.UkloniSaPozicije(2);
-	//cout << "Uklonjeno: " << uklonjeni.first << " " << uklonjeni.second << crt;
-	//cout << "Preostali elementi:" << crt << prosireniBrojevi;
+	DatumVrijeme voznja1(3, 7, 2026, 9, 0);
+	DatumVrijeme voznja2(3, 7, 2026, 9, 30);
+	DatumVrijeme voznja3(3, 7, 2026, 13, 0);
 
-	//try {
-	//	prosireniBrojevi.UkloniSaPozicije(10);
-	//}
-	//catch (exception& e) {
-	//	cout << "Exception: " << e.what() << crt;
-	//}
+	// ToString vraca datum i vrijeme u formatu DD.MM.GGGG HH:MM
+	cout << voznja1.ToString() << crt;
 
-	//Kolekcija<int, string, 5> kopijaBrojeva = brojevi;
-	//kopijaBrojeva[0] = 100;
-	//Kolekcija<int, string, 5> dodijeljeniBrojevi;
-	//dodijeljeniBrojevi = brojevi;
-	//dodijeljeniBrojevi[1] = 200;
-	//cout << "Original:" << crt << brojevi;
-	//cout << "Kopija:" << crt << kopijaBrojeva;
-	//cout << "Dodijeljeni objekat:" << crt << dodijeljeniBrojevi;
+	Plovilo vjetar("Jedrilica Vjetar", JEDRILICA, 8, 12.0, 2023);
+	Plovilo nova("Camac Nova", MOTORNI_CAMAC, 1, 18.0, 2020);
+	cout << vjetar << crt;
 
-	//DatumVrijeme polazak1(15, 7, 2026, 8, 0);
-	//DatumVrijeme polazak2(18, 7, 2026, 9, 0);
-	//DatumVrijeme polazak3(1, 8, 2026, 7, 0);
+	/*
+	GenerisiSifruKlijenta generise sifru klijenta u formatu KL-GG-BBB gdje su
+	GG posljednje dvije cifre tekuce godine, a BBB troznamenkasti redni broj
+	klijenta zasnovan na statickom brojacu _id. Iskoristiti je za
+	inicijalizaciju atributa _sifra u konstruktoru klase Klijent.
+	*/
+	Marina marina("Marina Riviera");
+	/*
+	DodajPlovilo dodaje plovilo u marinu. Ne dozvoliti dva plovila sa istom
+	oznakom - baciti izuzetak.
+	*/
+	marina.DodajPlovilo(vjetar);
+	marina.DodajPlovilo(nova);
+	try {
+		marina.DodajPlovilo(vjetar); // ista oznaka, ocekivan izuzetak
+	}
+	catch (exception& e) {
+		cout << "Exception: " << e.what() << crt;
+	}
 
-	//// ToString vraca datum i vrijeme u formatu DD.MM.GGGG HH:MM, ukljucujuci pocetne nule
-	//cout << polazak1.ToString() << crt; // 15.07.2026 08:00
+	/*
+	DodajKlijenta dodaje klijenta u marinu. Ne dozvoliti dva klijenta sa
+	istom sifrom - baciti izuzetak.
+	*/
+	Klijent ana("Ana Kovac", "061111222");
+	Klijent marko("Marko Ilic", "062333444");
+	marina.DodajKlijenta(ana);
+	marina.DodajKlijenta(marko);
 
-	//if (polazak2 > polazak1)
-	//	cout << "Polazak2 je hronoloski nakon polazak1" << crt;
+	string oznakaVjetra = marina.GetPlovila()[0].GetOznaka();
 
-	//DatumVrijeme kopijaPolaska(polazak2);
-	//if (kopijaPolaska == polazak2 && !(polazak1 == polazak2))
-	//	cout << "Provjera vremena, OK." << crt;
+	/*
+	NajmiPlovilo pronalazi klijenta (po sifri) i plovilo (po oznaci) i
+	pokusava dodati najam u plovilo. Najam se prihvata samo ako se termin ne
+	preklapa ni sa jednim vec postojecim terminom na istom plovilu, i (za
+	grupne najmove) ako broj putnika ne prelazi kapacitet plovila. Ako je
+	najam prihvacen, evidentira se i kod klijenta. Za grupne najmove sa 5 ili
+	vise putnika, u zasebnom threadu se salje SMS obavijest klijentu o
+	potvrdi najma, sadrzaja:
+	---------------------------------------------------------------------------------
+	Broj: 062333444
+	Od: Marina Riviera
+	Poruka: Postovani Marko Ilic, Vasa grupna voznja za 6 osoba na plovilu
+	MR-008/JV-3 je potvrdjena. Hvala na povjerenju.
+	---------------------------------------------------------------------------------
+	Metoda vraca true ako je najam uspjesno kreiran, u suprotnom false.
+	*/
+	marina.NajmiPlovilo(ana.GetSifra(), oznakaVjetra, new IndividualniNajam(voznja1, 3));
+	if (!marina.NajmiPlovilo(ana.GetSifra(), oznakaVjetra, new IndividualniNajam(voznja2, 2)))
+		cout << "Preklapajuci najam odbijen" << crt;
 
-	//Aranzman toskana("Obilazak Toskane", "Amina Buric", 42, EKSKURZIJA, polazak1, 5);
-	//Aranzman planine("Avantura na Alpama", "Goran Skondric", 7, AVANTURA, polazak2, 4);
-	//Aranzman konferencija("Poslovni summit", "Ana Marija Kovac", 156, POSLOVNO, polazak3, 3);
+	if (!marina.NajmiPlovilo(marko.GetSifra(), oznakaVjetra, new GrupniNajam(voznja3, 2, 12)))
+		cout << "Grupni najam odbijen (broj putnika premasuje kapacitet)" << crt;
 
-	//// ToString vraca podatke u formatu:
-	//// oznaka | naziv | tip | pocetak | broj dana
-	//cout << toskana.ToString() << crt;
-	//if (toskana.ToString() == "TA-EK-0042-AB | Obilazak Toskane | EKSKURZIJA | 15.07.2026 08:00 | 5")
-	//	cout << "Aranzman ToString OK" << crt;
+	if (marina.NajmiPlovilo(marko.GetSifra(), oznakaVjetra, new GrupniNajam(voznja3, 3, 6)))
+		cout << "Grupni najam prihvacen i SMS poslan" << crt;
 
-	//if (toskana.ImaPreklapanjeSa(planine))
-	//	cout << "Termini se preklapaju" << crt;
-	//if (!toskana.ImaPreklapanjeSa(konferencija))
-	//	cout << "Termini se ne preklapaju" << crt;
+	// UkupanPrihod vraca zbir (cijenaPoSatu * trajanjeSati) za sve najmove plovila.
+	cout << marina.GetPlovila()[0].GetOznaka() << " prihod: " << marina.GetPlovila()[0].UkupanPrihod() << " KM" << crt;
+	// UkupanPrihodMarine vraca zbir prihoda svih plovila u marini.
+	cout << "Ukupan prihod marine: " << marina.UkupanPrihodMarine() << " KM" << crt;
 
-	//Putnik amina("Amina Buric"), goran("Goran Skondric"), ana("Ana Marija Kovac");
+	/*
+	IzdvojiPreopterecena vraca pokazivace na sva plovila cija je ukupna
+	zauzetost (u satima, preko svih najmova) veca ili jednaka proslijedjenoj
+	vrijednosti minSati.
+	*/
+	vector<Plovilo*> preopterecena = marina.IzdvojiPreopterecena(3);
+	for (auto* p : preopterecena)
+		cout << p->GetOznaka() << " -> " << p->UkupnoZauzetihSati() << "h zauzetosti" << crt;
 
-	//if (amina.PrijaviAranzman(toskana))
-	//	cout << "Aranzman prijavljen" << crt;
-	//if (!amina.PrijaviAranzman(planine))
-	//	cout << "Aranzman nije prijavljen - preklapanje termina" << crt;
+	/*
+	IzdvojiPoUslovu je "moderniji" nacin filtriranja - prima std::function
+	predikat (npr. lambda izraz) i vraca pokazivace na sva plovila koja
+	zadovoljavaju uslov. Potpis metode treba biti:
+	vector<Plovilo*> IzdvojiPoUslovu(function<bool(const Plovilo&)> uslov)
+	*/
+	vector<Plovilo*> skupaPlovila = marina.IzdvojiPoUslovu([](const Plovilo& p) {
+		return p.GetCijenaPoSatu() >= 15.0;
+		});
+	cout << "Plovila skuplja od 15 KM/h:" << crt;
+	for (auto* p : skupaPlovila)
+		cout << p->GetNaziv() << " (" << p->GetCijenaPoSatu() << " KM/h)" << crt;
 
-	//Agencija centarSarajevo("Centar Sarajevo"), poslovnicaMostar("Poslovnica Mostar");
-	//centarSarajevo.DodajPutnika(amina);
-	//centarSarajevo.DodajPutnika(goran);
-	//poslovnicaMostar.DodajPutnika(ana);
+	// Sortiranje plovila po kapacitetu opadajuce, koristeci std::sort i lambda komparator.
+	sort(marina.GetPlovila().begin(), marina.GetPlovila().end(),
+		[](const Plovilo& a, const Plovilo& b) { return a.GetKapacitet() > b.GetKapacitet(); });
+	cout << "Plovila sortirana po kapacitetu:" << crt;
+	for (auto& p : marina.GetPlovila())
+		cout << p.GetNaziv() << " - kapacitet " << p.GetKapacitet() << crt;
 
-	//try {
-	//	centarSarajevo.DodajPutnika(amina);
-	//}
-	//catch (exception& e) {
-	//	cout << "Exception: " << e.what() << crt;
-	//}
-
-	//string sifraGorana = goran.GetSifra();
-	//Putnik* pronadjen = centarSarajevo.PronadjiPutnika(sifraGorana);
-	//if (pronadjen != nullptr)
-	//	cout << "Pronadjen putnik: " << pronadjen->GetImePrezime() << crt;
-	//if (centarSarajevo.PronadjiPutnika("TA-XX-9999-XX") == nullptr)
-	//	cout << "Nepostojeci putnik nije pronadjen" << crt;
-
-	//if (centarSarajevo.PrijaviAranzmanZaPutnika(sifraGorana, planine))
-	//	cout << "Prijava uspjesna, obavijest poslana" << crt;
-	//if (!centarSarajevo.PrijaviAranzmanZaPutnika("NEPOSTOJECA", konferencija))
-	//	cout << "Obavijest nije poslana za nepostojeceg putnika" << crt;
-
-	//vector<Putnik*> aktivni = centarSarajevo.AktivniPutnici(1);
-	//for (auto putnik : aktivni)
-	//	cout << putnik->GetImePrezime() << " ima " << putnik->GetAranzmani().size() << " aranzmana" << crt;
-
-	//Kolekcija<TipAranzmana, int, 4> statistika = centarSarajevo.StatistikaPoTipu();
-	//for (int i = 0; i < statistika.GetTrenutno(); i++)
-	//	cout << TipAranzmanaNazivi[(int)statistika.GetElement1(i)] << " -> " << statistika.GetElement2(i) << crt;
-
-	//vector<Putnik*> topPutnici = centarSarajevo(1);
-	//for (auto putnik : topPutnici)
-	//	cout << putnik->GetImePrezime() << crt;
-
-	//Agencija kopijaAgencije = centarSarajevo;
-	//cout << kopijaAgencije.GetNaziv() << " ima " << kopijaAgencije.GetPutnici().size() << " putnika" << crt;
+	/*
+	Funkcija UcitajKlijente ucitava klijente iz fajla cije ime se
+	proslijedjuje kao parametar. Svaka linija u fajlu treba biti u formatu
+	"ime i prezime|broj telefona". Funkcija za svaki red kreira novog
+	klijenta (ukoliko vec ne postoji klijent sa istim imenom i prezimenom) i
+	dodaje ga u proslijedjeni vektor. Funkcija vraca true ako je u vektor
+	ucitan najmanje jedan podatak, a false u suprotnom.
+	Primjer sadrzaja fajla:
+	Ana Kovac|061111222
+	Marko Ilic|062333444
+	*/
+	string nazivFajla = "klijenti.txt";
+	vector<Klijent> ucitaniKlijenti;
+	if (UcitajKlijente(nazivFajla, ucitaniKlijenti))
+		cout << "Ucitavanje uspjesno, ucitano " << ucitaniKlijenti.size() << " klijenata" << crt;
+	else
+		cout << "Ucitavanje neuspjesno (fajl ne postoji ili je prazan)" << crt;
 
 	cin.get();
 	return 0;
